@@ -221,6 +221,6 @@ GITHUB_ACTIONS=false PYTHONHASHSEED=0 python3 -m pytest -q "${REPO_ROOT}/test/" 
     --ignore="${REPO_ROOT}/test/test_prototype_models.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_transforms.py" \
     --ignore="${REPO_ROOT}/test/test_datasets_download.py" \
-    -n 4 --dist=worksteal \
+    -n 0 \
     --timeout=1800 --timeout-method=thread \
     --tb=short --disable-warnings -rsfE
