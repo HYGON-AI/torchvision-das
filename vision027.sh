@@ -17,7 +17,7 @@ from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
 
-base_url, project, required_text = sys.argv[1:]
+base_url, project, *required_texts = sys.argv[1:]
 python_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
 index_url = urljoin(base_url.rstrip("/") + "/", project.replace("_", "-") + "/")
 
@@ -45,23 +45,19 @@ for href in parser.hrefs:
         continue
     if f"-{python_tag}-{python_tag}-" not in filename:
         continue
-    if required_text not in filename:
+    if not all(required_text in filename for required_text in required_texts):
         continue
     candidates.append((filename, urljoin(index_url, href)))
 
 if not candidates:
     raise SystemExit(
-        f"no {project} wheel matching {required_text!r} and {python_tag} in {index_url}"
+        f"no {project} wheel matching {required_texts!r} and {python_tag} in {index_url}"
     )
 print(max(candidates)[1])
 PY
 }
 
-set +u
-# shellcheck disable=SC1091
-source /opt/dtk/env.sh
-set -u
-
+export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
 export ROCM_PATH="${ROCM_PATH:-/opt/dtk}"
 
 python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
@@ -82,11 +78,18 @@ esac
 
 TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
 FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn '.torch2120.')"
+TRITON_WHEEL_URL="$(select_latest_wheel triton 'triton-3.7.0+' '.torch2120.')"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
+echo "Selected Triton wheel: ${TRITON_WHEEL_URL##*/}"
 python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
+python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${TRITON_WHEEL_URL}"
 
+set +u
+# shellcheck disable=SC1091
+source /opt/dtk/env.sh
+set -u
 python3 -c 'import torch; print(f"torch={torch.__version__}")'
 
 cd "${REPO_ROOT}"
