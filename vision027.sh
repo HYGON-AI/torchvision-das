@@ -57,6 +57,11 @@ print(max(candidates)[1])
 PY
 }
 
+set +u
+# shellcheck disable=SC1091
+source /opt/dtk/env.sh
+set -u
+
 export ROCM_PATH="${ROCM_PATH:-/opt/dtk}"
 
 python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
@@ -82,10 +87,6 @@ echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
 
-set +u
-# shellcheck disable=SC1091
-source /opt/dtk/env.sh
-set -u
 python3 -c 'import torch; print(f"torch={torch.__version__}")'
 
 cd "${REPO_ROOT}"
