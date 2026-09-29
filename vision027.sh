@@ -9,12 +9,14 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ALIYUN_INDEX="http://mirrors.aliyun.com/pypi/simple/"
 
 export ROCM_PATH="${ROCM_PATH:-/opt/dtk}"
+set +u
 # shellcheck disable=SC1091
 source "${ROCM_PATH}/env.sh"
 if [[ -f "${ROCM_PATH}/cuda/env.sh" ]]; then
     # shellcheck disable=SC1091
     source "${ROCM_PATH}/cuda/env.sh"
 fi
+set -u
 
 if [[ -n "${EXPECTED_PYTHON_VERSION:-}" ]]; then
     python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
