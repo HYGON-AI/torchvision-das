@@ -35,9 +35,7 @@ jobs:
       matrix:
         include:
           - python_version: "3.10"
-            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310 }}
-          - python_version: "3.12"
-            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY312 }}
+            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
     container:
       image: ${{ matrix.image }}
       options: >-
