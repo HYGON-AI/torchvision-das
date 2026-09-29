@@ -13,7 +13,6 @@ readonly INTERNAL_INDEX="${INTERNAL_PIP_INDEX_URL:?INTERNAL_PIP_INDEX_URL is req
 select_latest_wheel() {
     python3 - "$INTERNAL_INDEX" "$1" "$2" <<'PY'
 import sys
-import re
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
@@ -48,10 +47,7 @@ for href in parser.hrefs:
         continue
     if required_text not in filename:
         continue
-    build_time = re.search(r"\.(\d{10})\.g[0-9a-f]+", filename)
-    if not build_time:
-        continue
-    candidates.append((int(build_time.group(1)), urljoin(index_url, href)))
+    candidates.append((filename, urljoin(index_url, href)))
 
 if not candidates:
     raise SystemExit(
