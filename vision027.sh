@@ -72,9 +72,22 @@ set -u
 python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
 
 case "${EXPECTED_PYTHON_VERSION}" in
-    3.10|3.12) readonly NUMPY_VERSION="1.26.4" ;;
+    3.10|3.12)
+        readonly NUMPY_VERSION="1.26.4"
+        readonly PANDAS_VERSION="2.2.3"
+        readonly SCIPY_VERSION="1.14.1"
+        ;;
     *) echo "unsupported Python version: ${EXPECTED_PYTHON_VERSION}" >&2; exit 1 ;;
 esac
+
+dnf install -y libjpeg-turbo-devel libwebp-devel
+python3 -m pip install --no-cache-dir \
+    "numpy==${NUMPY_VERSION}" \
+    "pandas==${PANDAS_VERSION}" \
+    "scipy==${SCIPY_VERSION}" \
+    "mkl==2025.3.0" \
+    wheel setuptools ninja \
+    -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
 
 MKL_LIBRARY=""
 for root in /opt/intel /usr/local/lib /usr/lib64; do
@@ -90,18 +103,13 @@ fi
 export LD_LIBRARY_PATH="$(dirname "${MKL_LIBRARY}"):${LD_LIBRARY_PATH:-}"
 echo "MKL library directory: $(dirname "${MKL_LIBRARY}")"
 
-dnf install -y libjpeg-turbo-devel libwebp-devel
-python3 -m pip install --no-cache-dir \
-    "numpy==${NUMPY_VERSION}" wheel setuptools ninja \
-    -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
-
 TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
 FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn '.torch2120.')"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
-python3 -c 'import numpy, torch; print(f"numpy={numpy.__version__}"); print(f"torch={torch.__version__}"); print(f"torch.hip={torch.version.hip}")'
+python3 -c 'import numpy, pandas, scipy, torch; print(f"numpy={numpy.__version__}"); print(f"pandas={pandas.__version__}"); print(f"scipy={scipy.__version__}"); print(f"torch={torch.__version__}"); print(f"torch.hip={torch.version.hip}")'
 
 cd "${REPO_ROOT}"
 export MAX_JOBS="${MAX_JOBS:-32}"
