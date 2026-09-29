@@ -215,7 +215,7 @@ PY
 )"
 
 cd /tmp
-PYTHONHASHSEED=0 python3 -m pytest -v -s "${REPO_ROOT}/test/" \
+PYTHONHASHSEED=0 python3 -m pytest -q "${REPO_ROOT}/test/" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_builtin.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_utils.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_models.py" \
