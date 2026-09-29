@@ -64,6 +64,13 @@ jobs:
           git -c user.name='TorchVision CI' -c user.email='ci@localhost' \
               merge --no-edit "${{ github.event.pull_request.base.sha }}"
 
+      - name: Show CI environment flags
+        shell: bash
+        run: |
+          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-<unset>}"
+          echo "CIRCLECI=${CIRCLECI:-<unset>}"
+          echo "CI=${CI:-<unset>}"
+
       - name: Configure internal pip source
         shell: bash
         env:
