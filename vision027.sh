@@ -69,13 +69,30 @@ if [[ -f "${ROCM_PATH}/cuda/env.sh" ]]; then
 fi
 set -u
 
-if [[ -n "${EXPECTED_PYTHON_VERSION:-}" ]]; then
-    python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
+python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
+
+case "${EXPECTED_PYTHON_VERSION}" in
+    3.10|3.12) readonly NUMPY_VERSION="1.26.4" ;;
+    *) echo "unsupported Python version: ${EXPECTED_PYTHON_VERSION}" >&2; exit 1 ;;
+esac
+
+MKL_LIBRARY=""
+for root in /opt/intel /usr/local/lib /usr/lib64; do
+    if [[ -d "${root}" ]]; then
+        MKL_LIBRARY="$(find "${root}" -name libmkl_intel_lp64.so.2 -print -quit 2>/dev/null || true)"
+        [[ -n "${MKL_LIBRARY}" ]] && break
+    fi
+done
+if [[ -z "${MKL_LIBRARY}" ]]; then
+    echo "libmkl_intel_lp64.so.2 not found in the build image" >&2
+    exit 1
 fi
+export LD_LIBRARY_PATH="$(dirname "${MKL_LIBRARY}"):${LD_LIBRARY_PATH:-}"
+echo "MKL library directory: $(dirname "${MKL_LIBRARY}")"
 
 dnf install -y libjpeg-turbo-devel libwebp-devel
 python3 -m pip install --no-cache-dir \
-    numpy==1.26.4 wheel setuptools ninja \
+    "numpy==${NUMPY_VERSION}" wheel setuptools ninja \
     -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
 
 TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
@@ -84,6 +101,7 @@ echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
+python3 -c 'import numpy, torch; print(f"numpy={numpy.__version__}"); print(f"torch={torch.__version__}"); print(f"torch.hip={torch.version.hip}")'
 
 cd "${REPO_ROOT}"
 export MAX_JOBS="${MAX_JOBS:-32}"
