@@ -43,7 +43,7 @@ for href in parser.hrefs:
     filename = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
     if not filename.endswith(".whl"):
         continue
-    if f"-{python_tag}-" not in filename:
+    if f"-{python_tag}-{python_tag}-" not in filename:
         continue
     if required_text not in filename:
         continue
