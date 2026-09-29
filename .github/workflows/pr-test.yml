@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
+  DTK_PKG_URL: ${{ vars.DTK_PKG_URL }}
   PYPI_URL: ${{ vars.PYPI_URL }}
   INTERNAL_PIP_INDEX_URL: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
 
