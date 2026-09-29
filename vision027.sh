@@ -96,6 +96,7 @@ python3 -m pip install --no-cache-dir \
     "numpy==${NUMPY_VERSION}" \
     "pandas==${PANDAS_VERSION}" \
     "scipy==${SCIPY_VERSION}" \
+    "pillow==11.2.1" \
     "setuptools==80.9.0" pybind11 wheel ninja auditwheel patchelf \
     --default-timeout 1000 \
     -i "${HUAWEI_INDEX}"
