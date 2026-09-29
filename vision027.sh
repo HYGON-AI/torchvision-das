@@ -43,7 +43,7 @@ for href in parser.hrefs:
     filename = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
     if not filename.endswith(".whl"):
         continue
-    if f"-{python_tag}-{python_tag}-" not in filename:
+    if f"-{python_tag}-" not in filename:
         continue
     if required_text not in filename:
         continue
@@ -206,6 +206,7 @@ print(matches[0])
 PY
 )"
 
+cd /tmp
 PYTHONHASHSEED=0 python3 -m pytest -vv "${REPO_ROOT}/test/" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_builtin.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_utils.py" \
