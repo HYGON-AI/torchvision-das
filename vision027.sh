@@ -103,16 +103,24 @@ python3 -m pip install --no-cache-dir \
 
 export USE_MKLDNN=0
 export MAX_JOBS="${MAX_JOBS:-32}"
-export HIPCC_VERBOSE=1
+export HIPCC_VERBOSE=0
 export PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH:-${AMDGPU_TARGETS:-}}"
 export LD_LIBRARY_PATH="$(python3 -c 'import os, torch; print(os.path.join(os.path.dirname(torch.__file__), "lib"))'):${LD_LIBRARY_PATH:-}"
 
 rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/dist"
 mkdir -p "${REPO_ROOT}/dist/manylinux"
 
-USE_GPU_VIDEO_DECODER=1 \
-USE_CPU_VIDEO_DECODER=1 \
-python3 setup.py bdist_wheel
+if USE_GPU_VIDEO_DECODER=1 \
+    USE_CPU_VIDEO_DECODER=1 \
+    python3 setup.py bdist_wheel >/tmp/torchvision-build.log 2>&1; then
+    echo "torchvision wheel build succeeded"
+    ls -lh dist/torchvision-*.whl
+else
+    rc=$?
+    echo "torchvision wheel build failed; showing last 300 lines"
+    tail -n 300 /tmp/torchvision-build.log
+    exit "${rc}"
+fi
 
 PLATFORM="$(ldd --version | awk 'NR == 1 {split($NF, version, "."); print "manylinux_" version[1] "_" version[2] "_x86_64"}')"
 echo "manylinux platform: ${PLATFORM}"
@@ -207,7 +215,7 @@ PY
 )"
 
 cd /tmp
-PYTHONHASHSEED=0 python3 -m pytest -vv "${REPO_ROOT}/test/" \
+PYTHONHASHSEED=0 python3 -m pytest -q "${REPO_ROOT}/test/" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_builtin.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_datasets_utils.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_models.py" \
@@ -215,4 +223,4 @@ PYTHONHASHSEED=0 python3 -m pytest -vv "${REPO_ROOT}/test/" \
     --ignore="${REPO_ROOT}/test/test_datasets_download.py" \
     -n 4 --dist=worksteal \
     --timeout=1800 --timeout-method=thread \
-    -ra
+    --tb=short --disable-warnings -rfE
