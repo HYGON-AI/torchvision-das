@@ -183,7 +183,7 @@ auditwheel repair \
 python3 -m pip install --no-deps --force-reinstall dist/manylinux/torchvision-*.whl
 
 python3 -m pip install --no-cache-dir \
-    pytest-mock pytest-xdist torchdata pytest-time pytest-rerunfailures \
+    pytest-mock pytest-xdist torchdata pytest-time pytest-timeout pytest-rerunfailures \
     -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
 
 export PYTORCH_TEST_WITH_ROCM=1
