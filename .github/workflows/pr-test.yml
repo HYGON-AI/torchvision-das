@@ -22,6 +22,7 @@ concurrency:
 env:
   DTK_PKG_URL: ${{ vars.RESOURCE_SERVER_URL }}/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz
   PYPI_URL: ${{ vars.PYPI_URL }}
+  INTERNAL_PIP_INDEX_URL: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
 
 jobs:
   build-test:
@@ -66,7 +67,7 @@ jobs:
       - name: Configure internal pip source
         shell: bash
         env:
-          PIP_INDEX: ${{ env.PYPI_URL }}/nightly/dtk2604/+simple/
+          PIP_INDEX: ${{ env.INTERNAL_PIP_INDEX_URL }}
         run: |
           set -euo pipefail
           trusted_host="${PIP_INDEX#*://}"
