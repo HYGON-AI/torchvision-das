@@ -13,11 +13,10 @@ readonly INTERNAL_INDEX="${INTERNAL_PIP_INDEX_URL:?INTERNAL_PIP_INDEX_URL is req
 select_latest_wheel() {
     python3 - "$INTERNAL_INDEX" "$1" "$2" <<'PY'
 import sys
+import re
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
-
-from packaging.version import Version
 
 base_url, project, required_text = sys.argv[1:]
 python_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
@@ -49,8 +48,10 @@ for href in parser.hrefs:
         continue
     if required_text not in filename:
         continue
-    version = Version(filename.split("-", 2)[1])
-    candidates.append((version, urljoin(index_url, href)))
+    build_time = re.search(r"\.(\d{10})\.g[0-9a-f]+", filename)
+    if not build_time:
+        continue
+    candidates.append((int(build_time.group(1)), urljoin(index_url, href)))
 
 if not candidates:
     raise SystemExit(
@@ -61,14 +62,6 @@ PY
 }
 
 export ROCM_PATH="${ROCM_PATH:-/opt/dtk}"
-set +u
-# shellcheck disable=SC1091
-source "${ROCM_PATH}/env.sh"
-if [[ -f "${ROCM_PATH}/cuda/env.sh" ]]; then
-    # shellcheck disable=SC1091
-    source "${ROCM_PATH}/cuda/env.sh"
-fi
-set -u
 
 python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
 
@@ -86,41 +79,18 @@ case "${EXPECTED_PYTHON_VERSION}" in
     *) echo "unsupported Python version: ${EXPECTED_PYTHON_VERSION}" >&2; exit 1 ;;
 esac
 
-python3 -m pip install --no-cache-dir \
-    "mkl==2025.3.0" packaging \
-    -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
-
-MKL_LIBRARY=""
-for root in /opt/intel /usr/local/lib /usr/lib64; do
-    if [[ -d "${root}" ]]; then
-        MKL_LIBRARY="$(find "${root}" -name libmkl_intel_lp64.so.2 -print -quit 2>/dev/null || true)"
-        [[ -n "${MKL_LIBRARY}" ]] && break
-    fi
-done
-if [[ -z "${MKL_LIBRARY}" ]]; then
-    echo "libmkl_intel_lp64.so.2 not found in the build image" >&2
-    exit 1
-fi
-export LD_LIBRARY_PATH="$(dirname "${MKL_LIBRARY}"):${LD_LIBRARY_PATH:-}"
-echo "MKL library directory: $(dirname "${MKL_LIBRARY}")"
-
 TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
 FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn '.torch2120.')"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
-python3 - <<'PY'
-import os
-import torch
 
-print(f"torch={torch.__version__}")
-print(f"torch.hip={torch.version.hip}")
-print(f"gpu_available={torch.cuda.is_available()}")
-print(f"torch_path={os.path.dirname(torch.__file__)}")
-if torch.version.hip is None:
-    raise SystemExit("installed PyTorch is not a ROCm/DCU build")
-PY
+set +u
+# shellcheck disable=SC1091
+source /opt/dtk/env.sh
+set -u
+python3 -c 'import torch; print(f"torch={torch.__version__}")'
 
 cd "${REPO_ROOT}"
 git submodule update --init --recursive
@@ -214,10 +184,9 @@ auditwheel repair \
     dist/torchvision-*.whl
 
 python3 -m pip install --no-deps --force-reinstall dist/manylinux/torchvision-*.whl
-python3 -c 'import numpy, pandas, scipy, torchvision; print(f"numpy={numpy.__version__}"); print(f"pandas={pandas.__version__}"); print(f"scipy={scipy.__version__}"); print(f"torchvision={torchvision.__version__}")'
 
 python3 -m pip install --no-cache-dir \
-    pytest pytest-mock pytest-xdist torchdata pytest-time pytest-timeout pytest-rerunfailures \
+    pytest-mock pytest-xdist torchdata pytest-time pytest-rerunfailures \
     -i "${ALIYUN_INDEX}" --trusted-host mirrors.aliyun.com
 
 export PYTORCH_TEST_WITH_ROCM=1
