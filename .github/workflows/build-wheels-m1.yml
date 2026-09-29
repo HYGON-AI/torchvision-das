@@ -19,6 +19,7 @@ permissions:
 
 jobs:
   generate-matrix:
+    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'ci/torchvision-py310-py312' }}
     uses: pytorch/test-infra/.github/workflows/generate_binary_build_matrix.yml@release/2.12
     with:
       package-type: wheel
