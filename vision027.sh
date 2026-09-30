@@ -11,7 +11,8 @@ readonly HUAWEI_INDEX="https://mirrors.huaweicloud.com/artifactory/pypi-public/s
 readonly INTERNAL_INDEX="${INTERNAL_PIP_INDEX_URL:?INTERNAL_PIP_INDEX_URL is required}"
 
 select_latest_wheel() {
-    python3 - "$INTERNAL_INDEX" "$1" "$2" <<'PY'
+    python3 - "$INTERNAL_INDEX" "$@" <<'PY'
+import re
 import sys
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
@@ -47,13 +48,19 @@ for href in parser.hrefs:
         continue
     if not all(required_text in filename for required_text in required_texts):
         continue
-    candidates.append((filename, urljoin(index_url, href)))
+    if project == "triton":
+        match = re.match(r"^triton-3\.7(?:\.0)?\+dtk2604\.torch2120\.(\d{10})\.", filename)
+        if match is None:
+            continue
+        candidates.append((match.group(1), filename, urljoin(index_url, href)))
+    else:
+        candidates.append((filename, urljoin(index_url, href)))
 
 if not candidates:
     raise SystemExit(
         f"no {project} wheel matching {required_texts!r} and {python_tag} in {index_url}"
     )
-print(max(candidates)[1])
+print(max(candidates)[-1])
 PY
 }
 
@@ -78,7 +85,7 @@ esac
 
 TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
 FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn '.torch2120.')"
-TRITON_WHEEL_URL="$(select_latest_wheel triton 'triton-3.7.0+' '.torch2120.')"
+TRITON_WHEEL_URL="$(select_latest_wheel triton)"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 echo "Selected Triton wheel: ${TRITON_WHEEL_URL##*/}"
@@ -225,6 +232,6 @@ GITHUB_ACTIONS=false PYTHONHASHSEED=0 python3 -m pytest -q "${REPO_ROOT}/test/" 
     --ignore="${REPO_ROOT}/test/test_prototype_models.py" \
     --ignore="${REPO_ROOT}/test/test_prototype_transforms.py" \
     --ignore="${REPO_ROOT}/test/test_datasets_download.py" \
-    -n 0 \
+    -n 4 --dist=worksteal \
     --timeout=1800 --timeout-method=thread \
     --tb=short --disable-warnings -rsfE || true
