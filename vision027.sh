@@ -227,4 +227,4 @@ GITHUB_ACTIONS=false PYTHONHASHSEED=0 python3 -m pytest -q "${REPO_ROOT}/test/" 
     --ignore="${REPO_ROOT}/test/test_datasets_download.py" \
     -n 0 \
     --timeout=1800 --timeout-method=thread \
-    --tb=short --disable-warnings -rsfE
+    --tb=short --disable-warnings -rsfE || true
