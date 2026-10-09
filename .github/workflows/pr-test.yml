@@ -110,6 +110,7 @@ jobs:
           set -euo pipefail
           if [[ "${DTK_VERSION}" == "dtk2610" ]]; then
             wget -q http://42.228.13.241:18000/ai_cc/Nightly/hcu_llvm_installer.sh
+            export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
             aicc_version="$(python3 - <<'PY'
           import re
           from html.parser import HTMLParser
