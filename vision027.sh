@@ -8,25 +8,25 @@ set -euo pipefail
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ALIYUN_INDEX="http://mirrors.aliyun.com/pypi/simple/"
 readonly HUAWEI_INDEX="https://mirrors.huaweicloud.com/artifactory/pypi-public/simple"
-readonly INTERNAL_INDEX="${INTERNAL_PIP_INDEX_URL:?INTERNAL_PIP_INDEX_URL is required}"
+readonly TSINGHUA_INDEX="https://pypi.tuna.tsinghua.edu.cn/simple"
+readonly INTERNAL_INDEXES="${INTERNAL_PIP_INDEX_URLS:?INTERNAL_PIP_INDEX_URLS is required}"
 readonly WHEEL_DTK_TAG="${WHEEL_DTK_TAG:?WHEEL_DTK_TAG is required}"
 
-select_latest_wheel() {
-    python3 - "$INTERNAL_INDEX" "$WHEEL_DTK_TAG" "$@" <<'PY'
+select_wheel_set() {
+    python3 - "$INTERNAL_INDEXES" "$WHEEL_DTK_TAG" <<'PY'
 import re
 import sys
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
 
-base_url, dtk_tag, project = sys.argv[1:]
+index_urls, dtk_tag = sys.argv[1:]
 python_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
-index_url = urljoin(base_url.rstrip("/") + "/", project.replace("_", "-") + "/")
-dtk_tag = re.escape(dtk_tag)
+dtk_tag_re = re.escape(dtk_tag)
 patterns = {
-    "torch": rf"^torch-2\.12\.0\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
-    "triton": rf"^triton-3\.7(?:\.0)?\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
-    "flash-attn": rf"^flash_attn-[^+]+\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
+    "torch": rf"^torch-2\.12\.0\+{dtk_tag_re}\.torch2120\.(\d{{10}})\.",
+    "triton": rf"^triton-3\.7(?:\.0)?\+{dtk_tag_re}\.torch2120\.(\d{{10}})\.",
+    "flash-attn": rf"^flash_attn-[^+]+\+{dtk_tag_re}\.torch2120\.(\d{{10}})\.",
 }
 
 
@@ -42,26 +42,42 @@ class Links(HTMLParser):
                 self.hrefs.append(href)
 
 
-parser = Links()
-with urlopen(index_url) as response:
-    parser.feed(response.read().decode())
+complete_sets = []
+for base_url in index_urls.split():
+    selected = {}
+    for project, pattern in patterns.items():
+        index_url = urljoin(base_url.rstrip("/") + "/", project + "/")
+        parser = Links()
+        try:
+            with urlopen(index_url, timeout=30) as response:
+                parser.feed(response.read().decode())
+        except OSError as exc:
+            print(f"skipping {base_url}: cannot read {project}: {exc}", file=sys.stderr)
+            break
+        candidates = []
+        for href in parser.hrefs:
+            wheel_url = urljoin(index_url, href)
+            filename = unquote(urlsplit(wheel_url).path.rsplit("/", 1)[-1])
+            if not filename.endswith(".whl") or f"-{python_tag}-{python_tag}-" not in filename:
+                continue
+            if not wheel_url.startswith(base_url.split("/+simple/", 1)[0] + "/"):
+                continue
+            match = re.match(pattern, filename)
+            if match:
+                candidates.append((match.group(1), filename, wheel_url))
+        if not candidates:
+            print(f"skipping {base_url}: no matching {project} {python_tag} wheel", file=sys.stderr)
+            break
+        selected[project] = max(candidates)
+    if len(selected) == len(patterns):
+        complete_sets.append((selected["torch"][0], base_url, selected))
 
-candidates = []
-for href in parser.hrefs:
-    filename = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
-    if not filename.endswith(".whl"):
-        continue
-    if f"-{python_tag}-{python_tag}-" not in filename:
-        continue
-    match = re.match(patterns[project], filename)
-    if match:
-        candidates.append((match.group(1), filename, urljoin(index_url, href)))
-
-if not candidates:
-    raise SystemExit(
-        f"no {project} wheel matching {dtk_tag} torch2120 and {python_tag} in {index_url}"
-    )
-print(max(candidates)[-1])
+if not complete_sets:
+    raise SystemExit(f"no complete {dtk_tag} torch2120 {python_tag} wheel set in {index_urls}")
+_, selected_index, selected = max(complete_sets)
+print(selected_index)
+for project in ("torch", "triton", "flash-attn"):
+    print(selected[project][-1])
 PY
 }
 
@@ -70,29 +86,21 @@ export ROCM_PATH="${ROCM_PATH:-/opt/dtk}"
 
 python3 -c 'import os, sys; expected = os.environ["EXPECTED_PYTHON_VERSION"]; actual = f"{sys.version_info.major}.{sys.version_info.minor}"; assert actual == expected, f"expected Python {expected}, got {actual}"'
 
-case "${EXPECTED_PYTHON_VERSION}" in
-    3.10)
-        readonly NUMPY_VERSION="1.24.4"
-        readonly PANDAS_VERSION="2.0.3"
-        readonly SCIPY_VERSION="1.10.1"
-        ;;
-    3.12)
-        readonly NUMPY_VERSION="1.26.4"
-        readonly PANDAS_VERSION="2.2.3"
-        readonly SCIPY_VERSION="1.14.1"
-        ;;
-    *) echo "unsupported Python version: ${EXPECTED_PYTHON_VERSION}" >&2; exit 1 ;;
-esac
-
-TORCH_WHEEL_URL="$(select_latest_wheel torch)"
-FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn)"
-TRITON_WHEEL_URL="$(select_latest_wheel triton)"
+wheel_selection="$(select_wheel_set)"
+mapfile -t wheel_urls <<< "${wheel_selection}"
+readonly SELECTED_INDEX="${wheel_urls[0]}"
+TORCH_WHEEL_URL="${wheel_urls[1]}"
+TRITON_WHEEL_URL="${wheel_urls[2]}"
+FLASH_ATTN_WHEEL_URL="${wheel_urls[3]}"
+echo "Selected wheel source: ${SELECTED_INDEX}"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 echo "Selected Triton wheel: ${TRITON_WHEEL_URL##*/}"
-python3 -m pip install --no-cache-dir --upgrade --force-reinstall "${TORCH_WHEEL_URL}"
-python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${FLASH_ATTN_WHEEL_URL}"
-python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${TRITON_WHEEL_URL}"
+trusted_host="${SELECTED_INDEX#*://}"
+trusted_host="${trusted_host%%/*}"
+python3 -m pip install --no-cache-dir --upgrade --force-reinstall \
+    -i "${SELECTED_INDEX}" --trusted-host "${trusted_host}" \
+    "${TORCH_WHEEL_URL}" "${TRITON_WHEEL_URL}" "${FLASH_ATTN_WHEEL_URL}"
 
 set +u
 # shellcheck disable=SC1091
@@ -104,10 +112,11 @@ cd "${REPO_ROOT}"
 git submodule update --init --recursive
 
 dnf install -y libjpeg-turbo-devel libwebp-devel
+python3 -m pip install --no-cache-dir -i "${TSINGHUA_INDEX}" \
+    numpy==2.1.0 scipy==1.13.1 numba==0.61.2 \
+    tensorboard==2.18.0 tensorboard-data-server==0.7.2 pandas==2.2.3 \
+    'http://10.16.1.201:9929/open/deps/+f/600/4bb8d8b831c55/hcusmi-1.0.0+630c16a6.dirty-py3-none-any.whl#sha256=6004bb8d8b831c552a867633ac0c91102f4e8b9882e7b0e1387bd5421c31131b'
 python3 -m pip install --no-cache-dir \
-    "numpy==${NUMPY_VERSION}" \
-    "pandas==${PANDAS_VERSION}" \
-    "scipy==${SCIPY_VERSION}" \
     "pillow==11.2.1" \
     "setuptools==80.9.0" pybind11 wheel ninja auditwheel patchelf \
     --default-timeout 1000 \
