@@ -9,18 +9,25 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ALIYUN_INDEX="http://mirrors.aliyun.com/pypi/simple/"
 readonly HUAWEI_INDEX="https://mirrors.huaweicloud.com/artifactory/pypi-public/simple"
 readonly INTERNAL_INDEX="${INTERNAL_PIP_INDEX_URL:?INTERNAL_PIP_INDEX_URL is required}"
+readonly WHEEL_DTK_TAG="${WHEEL_DTK_TAG:?WHEEL_DTK_TAG is required}"
 
 select_latest_wheel() {
-    python3 - "$INTERNAL_INDEX" "$@" <<'PY'
+    python3 - "$INTERNAL_INDEX" "$WHEEL_DTK_TAG" "$@" <<'PY'
 import re
 import sys
 from html.parser import HTMLParser
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
 
-base_url, project, *required_texts = sys.argv[1:]
+base_url, dtk_tag, project = sys.argv[1:]
 python_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
 index_url = urljoin(base_url.rstrip("/") + "/", project.replace("_", "-") + "/")
+dtk_tag = re.escape(dtk_tag)
+patterns = {
+    "torch": rf"^torch-2\.12\.0\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
+    "triton": rf"^triton-3\.7(?:\.0)?\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
+    "flash-attn": rf"^flash_attn-[^+]+\+{dtk_tag}\.torch2120\.(\d{{10}})\.",
+}
 
 
 class Links(HTMLParser):
@@ -46,19 +53,13 @@ for href in parser.hrefs:
         continue
     if f"-{python_tag}-{python_tag}-" not in filename:
         continue
-    if not all(required_text in filename for required_text in required_texts):
-        continue
-    if project == "triton":
-        match = re.match(r"^triton-3\.7(?:\.0)?\+dtk2604\.torch2120\.(\d{10})\.", filename)
-        if match is None:
-            continue
+    match = re.match(patterns[project], filename)
+    if match:
         candidates.append((match.group(1), filename, urljoin(index_url, href)))
-    else:
-        candidates.append((filename, urljoin(index_url, href)))
 
 if not candidates:
     raise SystemExit(
-        f"no {project} wheel matching {required_texts!r} and {python_tag} in {index_url}"
+        f"no {project} wheel matching {dtk_tag} torch2120 and {python_tag} in {index_url}"
     )
 print(max(candidates)[-1])
 PY
@@ -83,8 +84,8 @@ case "${EXPECTED_PYTHON_VERSION}" in
     *) echo "unsupported Python version: ${EXPECTED_PYTHON_VERSION}" >&2; exit 1 ;;
 esac
 
-TORCH_WHEEL_URL="$(select_latest_wheel torch 'torch-2.12.0+')"
-FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn '.torch2120.')"
+TORCH_WHEEL_URL="$(select_latest_wheel torch)"
+FLASH_ATTN_WHEEL_URL="$(select_latest_wheel flash-attn)"
 TRITON_WHEEL_URL="$(select_latest_wheel triton)"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"

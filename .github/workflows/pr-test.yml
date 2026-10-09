@@ -19,14 +19,9 @@ concurrency:
   group: torchvision-pr-test-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-env:
-  DTK_PKG_URL: ${{ vars.DTK_PKG_URL }}
-  PYPI_URL: ${{ vars.PYPI_URL }}
-  INTERNAL_PIP_INDEX_URL: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
-
 jobs:
   build-test:
-    name: build-test (${{ matrix.python_version }})
+    name: build-test (${{ matrix.dtk }}, py${{ matrix.python_version }})
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: self-hosted
     timeout-minutes: 480
@@ -34,8 +29,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python_version: "3.10"
+          - dtk: dtk2604
+            python_version: "3.10"
             image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            dtk_pkg_url: ${{ vars.DTK_PKG_URL }}
+            pip_index_url: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
+          - dtk: dtk2610
+            python_version: "3.10"
+            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            dtk_pkg_url: http://42.228.13.241:18000/dtk-pkg/dtk26.10/DTK-26.10-Rocky8.6-x86_64.tar.gz
+            pip_index_url: http://10.16.1.201:9929/customer/dtk2610/+simple/
+    env:
+      DTK_PKG_URL: ${{ matrix.dtk_pkg_url }}
+      INTERNAL_PIP_INDEX_URL: ${{ matrix.pip_index_url }}
+      WHEEL_DTK_TAG: ${{ matrix.dtk }}
     container:
       image: ${{ matrix.image }}
       options: >-
@@ -98,10 +105,51 @@ jobs:
         shell: bash
         env:
           RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL }}
+          DTK_VERSION: ${{ matrix.dtk }}
         run: |
           set -euo pipefail
-          wget -q "${RESOURCE_SERVER_URL}/ai_cc/Nightly/hcu_llvm_installer.sh"
-          bash hcu_llvm_installer.sh --major 1.0.0
+          if [[ "${DTK_VERSION}" == "dtk2610" ]]; then
+            wget -q http://42.228.13.241:18000/ai_cc/Nightly/hcu_llvm_installer.sh
+            aicc_version="$(python3 - <<'PY'
+          import re
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urlsplit
+          from urllib.request import urlopen
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.hrefs.append(href)
+
+          parser = Links()
+          with urlopen("http://42.228.13.241:18000/ai_cc/Nightly/") as response:
+              parser.feed(response.read().decode())
+          candidates = []
+          for href in parser.hrefs:
+              filename = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
+              match = re.fullmatch(
+                  r"dtk_llvm_aicc-(2\.0\.0\+dtk2610\.(\d{10})\.g[0-9a-f]+)-x86_64\.run",
+                  filename,
+              )
+              if match:
+                  candidates.append((match.group(2), match.group(1)))
+          if not candidates:
+              raise SystemExit("no AICC 2.0.0+dtk2610 installer found")
+          print(max(candidates)[1])
+          PY
+            )"
+            echo "Selected AICC version: ${aicc_version}"
+            bash hcu_llvm_installer.sh --version "${aicc_version}"
+          else
+            wget -q "${RESOURCE_SERVER_URL}/ai_cc/Nightly/hcu_llvm_installer.sh"
+            bash hcu_llvm_installer.sh --major 1.0.0
+          fi
 
       - name: Build and test torchvision
         shell: bash
