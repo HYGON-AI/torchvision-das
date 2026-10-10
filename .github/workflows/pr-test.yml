@@ -15,10 +15,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: torchvision-pr-test-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   build-test:
     name: build-test (${{ matrix.dtk }}, py${{ matrix.python_version }})
