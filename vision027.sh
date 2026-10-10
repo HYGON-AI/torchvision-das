@@ -96,10 +96,16 @@ echo "Selected wheel source: ${SELECTED_INDEX}"
 echo "Selected Torch wheel: ${TORCH_WHEEL_URL##*/}"
 echo "Selected flash-attn wheel: ${FLASH_ATTN_WHEEL_URL##*/}"
 echo "Selected Triton wheel: ${TRITON_WHEEL_URL##*/}"
+python3 -m pip install --no-cache-dir -i "${TSINGHUA_INDEX}" \
+    numpy==2.1.0 scipy==1.13.1 numba==0.61.2 \
+    tensorboard==2.18.0 tensorboard-data-server==0.7.2 pandas==2.2.3 \
+    cloudpickle filelock 'typing-extensions>=4.10.0' setuptools==80.9.0 \
+    'sympy>=1.13.3' 'networkx>=2.5.1' jinja2 'fsspec>=0.8.5' einops \
+    'http://10.16.1.201:9929/open/deps/+f/600/4bb8d8b831c55/hcusmi-1.0.0+630c16a6.dirty-py3-none-any.whl#sha256=6004bb8d8b831c552a867633ac0c91102f4e8b9882e7b0e1387bd5421c31131b'
 trusted_host="${SELECTED_INDEX#*://}"
 trusted_host="${trusted_host%%/*}"
-python3 -m pip install --no-cache-dir --upgrade --force-reinstall \
-    -i "${SELECTED_INDEX}" --trusted-host "${trusted_host}" \
+python3 -m pip install --no-cache-dir --no-index --no-deps --force-reinstall \
+    --trusted-host "${trusted_host}" \
     "${TORCH_WHEEL_URL}" "${TRITON_WHEEL_URL}" "${FLASH_ATTN_WHEEL_URL}"
 
 set +u
@@ -112,13 +118,9 @@ cd "${REPO_ROOT}"
 git submodule update --init --recursive
 
 dnf install -y libjpeg-turbo-devel libwebp-devel
-python3 -m pip install --no-cache-dir -i "${TSINGHUA_INDEX}" \
-    numpy==2.1.0 scipy==1.13.1 numba==0.61.2 \
-    tensorboard==2.18.0 tensorboard-data-server==0.7.2 pandas==2.2.3 \
-    'http://10.16.1.201:9929/open/deps/+f/600/4bb8d8b831c55/hcusmi-1.0.0+630c16a6.dirty-py3-none-any.whl#sha256=6004bb8d8b831c552a867633ac0c91102f4e8b9882e7b0e1387bd5421c31131b'
 python3 -m pip install --no-cache-dir \
     "pillow==11.2.1" \
-    "setuptools==80.9.0" pybind11 wheel ninja auditwheel patchelf \
+    pybind11 wheel ninja auditwheel patchelf \
     --default-timeout 1000 \
     -i "${HUAWEI_INDEX}"
 
@@ -217,9 +219,9 @@ python3 -m pip install --no-cache-dir \
 
 export PYTORCH_TEST_WITH_ROCM=1
 export CONTINUE_THROUGH_ERROR=True
-export MIOPEN_DEBUG_CONVOLUTION_DETERMINISTIC=1
-export ROCBLAS_ATOMICS_MOD=0
-export MIOPEN_DEBUG_HIPNN_CONV_S591=0
+# export MIOPEN_DEBUG_CONVOLUTION_DETERMINISTIC=1
+# export ROCBLAS_ATOMICS_MOD=0
+# export MIOPEN_DEBUG_HIPNN_CONV_S591=0
 export PYTORCH_TEST_WITH_EXTENDED=0
 export HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-1,2}"
 export FA_SO_PATH="$(python3 - <<'PY'
