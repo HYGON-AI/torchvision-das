@@ -1,0 +1,147 @@
+# Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: pr-test
+
+# This workflow intentionally executes fork PR code on a privileged self-hosted
+# runner after repository maintainers approve the run. It must not consume
+# repository secrets.
+on:
+  pull_request:
+    branches:
+      - 0.27.0-dev
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build-test (${{ matrix.dtk }}, py${{ matrix.python_version }})
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: self-hosted
+    timeout-minutes: 480
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dtk: dtk2604
+            python_version: "3.10"
+            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            dtk_pkg_url: ${{ vars.DTK_PKG_URL }}
+            wheel_indexes: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
+          - dtk: dtk2610
+            python_version: "3.10"
+            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            dtk_pkg_url: http://42.228.13.241:18000/dtk-pkg/dtk26.10/DTK-26.10-Rocky8.6-x86_64.tar.gz
+            wheel_indexes: >-
+              http://10.16.1.201:9929/customer/dtk2610/+simple/
+              http://10.16.1.201:9929/das_nightly/dtk2610/+simple/
+    env:
+      DTK_PKG_URL: ${{ matrix.dtk_pkg_url }}
+      INTERNAL_PIP_INDEX_URLS: ${{ matrix.wheel_indexes }}
+      WHEEL_DTK_TAG: ${{ matrix.dtk }}
+    container:
+      image: ${{ matrix.image }}
+      options: >-
+        --device=/dev/kfd --device=/dev/dri/ --group-add video
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --shm-size=80G
+        --cap-add=SYS_PTRACE
+        --security-opt seccomp=unconfined
+        --privileged=true
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Integrate target branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git -c user.name='TorchVision CI' -c user.email='ci@localhost' \
+              merge --no-edit "${{ github.event.pull_request.base.sha }}"
+
+      - name: Show CI environment flags
+        shell: bash
+        run: |
+          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-<unset>}"
+          echo "CIRCLECI=${CIRCLECI:-<unset>}"
+          echo "CI=${CI:-<unset>}"
+
+      - name: Install DTK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /opt
+          wget -q "${DTK_PKG_URL}"
+          tar -xzf "$(basename "${DTK_PKG_URL}")"
+          rm -rf dtk
+          mv dtk-* dtk
+
+      - name: Install AICC
+        shell: bash
+        env:
+          RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL }}
+          DTK_VERSION: ${{ matrix.dtk }}
+        run: |
+          set -euo pipefail
+          if [[ "${DTK_VERSION}" == "dtk2610" ]]; then
+            wget -q http://42.228.13.241:18000/ai_cc/Nightly/hcu_llvm_installer.sh
+            export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
+            aicc_version="$(python3 - <<'PY'
+          import re
+          from html.parser import HTMLParser
+          from urllib.parse import unquote, urlsplit
+          from urllib.request import urlopen
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.hrefs.append(href)
+
+          parser = Links()
+          with urlopen("http://42.228.13.241:18000/ai_cc/Nightly/") as response:
+              parser.feed(response.read().decode())
+          candidates = []
+          for href in parser.hrefs:
+              filename = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
+              match = re.fullmatch(
+                  r"dtk_llvm_aicc-(2\.0\.0\+dtk2610\.(\d{10})\.g[0-9a-f]+)-x86_64\.run",
+                  filename,
+              )
+              if match:
+                  candidates.append((match.group(2), match.group(1)))
+          if not candidates:
+              raise SystemExit("no AICC 2.0.0+dtk2610 installer found")
+          print(max(candidates)[1])
+          PY
+            )"
+            echo "Selected AICC version: ${aicc_version}"
+            bash hcu_llvm_installer.sh --version "${aicc_version}"
+          else
+            wget -q "${RESOURCE_SERVER_URL}/ai_cc/Nightly/hcu_llvm_installer.sh"
+            bash hcu_llvm_installer.sh --major 1.0.0
+          fi
+
+      - name: Build and test torchvision
+        shell: bash
+        env:
+          EXPECTED_PYTHON_VERSION: ${{ matrix.python_version }}
+        run: bash vision027.sh
+
+      - name: Clean workspace
+        if: always()
+        shell: bash
+        run: rm -rf "${GITHUB_WORKSPACE}"/* "${GITHUB_WORKSPACE}"/.[!.]* || true
