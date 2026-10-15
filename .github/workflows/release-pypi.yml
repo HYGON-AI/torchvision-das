@@ -141,6 +141,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export ROCM_PATH=/opt/dtk
+          set +u
+          source /opt/dtk/env.sh
+          set -u
+          export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
           shopt -s nullglob
           wheels=(dist/manylinux/torchvision-*.whl)
           if (( ${#wheels[@]} != 1 )); then
@@ -156,6 +161,11 @@ jobs:
             --git_commit "${GITHUB_SHA}" \
             --outputdir output \
             -f "${wheels[0]}"
+          repaired_wheels=(output/*.whl)
+          if (( ${#repaired_wheels[@]} != 1 )); then
+            echo '::error::Expected exactly one repaired wheel; nothing to upload.'
+            exit 1
+          fi
 
       - name: Upload NIGHTLY
         if: ${{ !cancelled() && steps.prepare_wheel.outcome == 'success' }}
@@ -165,11 +175,22 @@ jobs:
           PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           set -euo pipefail
+          export ROCM_PATH=/opt/dtk
+          set +u
+          source /opt/dtk/env.sh
+          set -u
+          export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
+          shopt -s nullglob
+          repaired_wheels=(output/*.whl)
+          if (( ${#repaired_wheels[@]} != 1 )); then
+            echo '::error::Expected exactly one repaired wheel; nothing to upload.'
+            exit 1
+          fi
           CIUpload NIGHTLY \
             --devpi_url "${PYPI_URL}" \
             --password "${PYPI_PASSWORD}" \
             --dtk_pkg_name "$(basename "${DTK_PKG_URL}")" \
-            -f output/*.whl \
+            -f "${repaired_wheels[0]}" \
             --record
 
       - name: Clean workspace
