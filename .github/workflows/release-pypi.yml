@@ -126,15 +126,27 @@ jobs:
           fi
 
       - name: Build and test torchvision
+        id: build_test
         shell: bash
         env:
           EXPECTED_PYTHON_VERSION: "3.10"
-        run: bash vision027.sh
+        run: |
+          rm -rf dist output
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          bash vision027.sh
 
       - name: Prepare NIGHTLY wheel
+        id: prepare_wheel
+        if: ${{ !cancelled() && steps.build_test.outcome != 'skipped' }}
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/manylinux/torchvision-*.whl)
+          if (( ${#wheels[@]} != 1 )); then
+            echo '::error::Expected exactly one wheel from this run; nothing to upload.'
+            exit 1
+          fi
           python3 -m pip install --no-cache-dir ciupload \
             -i "${PYPI_URL}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
           torch_version="$(python3 -c 'import torch; print(torch.__version__.split("+")[0])')"
@@ -143,9 +155,10 @@ jobs:
             --torch_version "${torch_version}" \
             --git_commit "${GITHUB_SHA}" \
             --outputdir output \
-            -f dist/manylinux/torchvision-*.whl
+            -f "${wheels[0]}"
 
       - name: Upload NIGHTLY
+        if: ${{ !cancelled() && steps.prepare_wheel.outcome == 'success' }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
