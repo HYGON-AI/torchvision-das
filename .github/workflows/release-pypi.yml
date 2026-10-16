@@ -154,8 +154,10 @@ jobs:
           fi
           python3 -m pip install --no-cache-dir ciupload \
             -i "${PYPI_URL}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
-          torch_version="$(python3 -c 'import torch; print(torch.__version__.split("+")[0])')"
-          CIUpload REPAIR \
+          torch_version="$(python3 -c 'import torch; print(torch.__version__.split("+", 1)[0].strip())')"
+          printf 'Torch version for REPAIR: %q\n' "${torch_version}"
+          python3 -c 'import ciupload.main; print(f"CIUpload module: {ciupload.main.__file__}")'
+          python3 -m ciupload.main REPAIR \
             --dtk_version "${WHEEL_DTK_TAG#dtk}" \
             --torch_version "${torch_version}" \
             --git_commit "${GITHUB_SHA}" \
@@ -186,10 +188,15 @@ jobs:
             echo '::error::Expected exactly one repaired wheel; nothing to upload.'
             exit 1
           fi
-          CIUpload NIGHTLY \
+          if [[ "${WHEEL_DTK_TAG}" == dtk2610 ]]; then
+            dtk_args=(--dtk_version "${WHEEL_DTK_TAG#dtk}")
+          else
+            dtk_args=(--dtk_pkg_name "$(basename "${DTK_PKG_URL}")")
+          fi
+          python3 -m ciupload.main NIGHTLY \
             --devpi_url "${PYPI_URL}" \
             --password "${PYPI_PASSWORD}" \
-            --dtk_pkg_name "$(basename "${DTK_PKG_URL}")" \
+            "${dtk_args[@]}" \
             -f "${repaired_wheels[0]}" \
             --record
 

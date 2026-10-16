@@ -141,6 +141,38 @@ jobs:
           EXPECTED_PYTHON_VERSION: ${{ matrix.python_version }}
         run: bash vision027.sh
 
+      - name: Validate NIGHTLY wheel repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ROCM_PATH=/opt/dtk
+          set +u
+          source /opt/dtk/env.sh
+          set -u
+          export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
+          shopt -s nullglob
+          wheels=(dist/manylinux/torchvision-*.whl)
+          if (( ${#wheels[@]} != 1 )); then
+            echo '::error::Expected exactly one wheel to validate.'
+            exit 1
+          fi
+          python3 -m pip install --no-cache-dir ciupload \
+            -i "${{ vars.PYPI_URL }}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
+          torch_version="$(python3 -c 'import torch; print(torch.__version__.split("+", 1)[0].strip())')"
+          printf 'Torch version for REPAIR: %q\n' "${torch_version}"
+          python3 -c 'import ciupload.main; print(f"CIUpload module: {ciupload.main.__file__}")'
+          python3 -m ciupload.main REPAIR \
+            --dtk_version "${WHEEL_DTK_TAG#dtk}" \
+            --torch_version "${torch_version}" \
+            --git_commit "${GITHUB_SHA}" \
+            --outputdir output \
+            -f "${wheels[0]}"
+          repaired_wheels=(output/*.whl)
+          if (( ${#repaired_wheels[@]} != 1 )); then
+            echo '::error::Expected exactly one repaired wheel.'
+            exit 1
+          fi
+
       - name: Clean workspace
         if: always()
         shell: bash
