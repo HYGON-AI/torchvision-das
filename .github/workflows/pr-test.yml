@@ -158,7 +158,8 @@ jobs:
           fi
           python3 -m pip install --no-cache-dir ciupload \
             -i "${{ vars.PYPI_URL }}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
-          torch_version="$(python3 -c 'import torch; print(torch.__version__.split("+", 1)[0].strip())')"
+          # Importing torch on DTK 26.10 also writes /dev/hyfs errors to stdout.
+          torch_version="$(python3 -c 'from importlib.metadata import version; print(version("torch").split("+", 1)[0])')"
           printf 'Torch version for REPAIR: %q\n' "${torch_version}"
           python3 -c 'import ciupload.main; print(f"CIUpload module: {ciupload.main.__file__}")'
           python3 -m ciupload.main REPAIR \
