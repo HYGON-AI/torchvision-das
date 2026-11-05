@@ -1,5 +1,23 @@
 # torchvision
 
+This repository is based on the following fixed upstream baseline:<br>
+
+• Upstream project: vision<br>
+
+• Upstream repository: GitHub - https://github.com/pytorch/vision.git: Datasets, Transforms and Models specific to Computer Vision.<br>
+
+• Upstream branch: release/0.28<br>
+
+• Upstream tag: v0.28.0<br>
+
+• Upstream commit: 8fb87713a24951e639c494b0f2a8a81b5f8e33a6<br>
+
+• Upstream license: BSD-3-Clause<br>
+
+HCU adaptations, modifications, and original contributions by Hygon Information Technology Co., Ltd. are licensed under the Apache License, Version 2.0.
+Modified by Hygon Information Technology Co., Ltd.
+Original copyright notices and license terms from the upstream vision project are retained.
+
 [![total torchvision downloads](https://pepy.tech/badge/torchvision)](https://pepy.tech/project/torchvision)
 [![documentation](https://img.shields.io/badge/dynamic/json.svg?label=docs&url=https%3A%2F%2Fpypi.org%2Fpypi%2Ftorchvision%2Fjson&query=%24.info.version&colorB=brightgreen&prefix=v)](https://pytorch.org/vision/stable/index.html)
 
