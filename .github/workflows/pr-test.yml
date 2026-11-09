@@ -40,7 +40,7 @@ jobs:
           d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
           mkdir -p "${d}"
           cp "${wheels[0]}" "${d}/"
-          python3 -m pip freeze > "${d}/build-requirements.txt"
+          python3 -m pip freeze | grep -vi '^torchvision==' > "${d}/build-requirements.txt"
 
   test:
     needs: build
