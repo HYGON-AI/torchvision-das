@@ -1,0 +1,121 @@
+name: Release NIGHTLY
+
+on:
+  push:
+    branches: [0.28.0-dev]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: hygon-build
+    timeout-minutes: 90
+    container:
+      image: 10.16.1.152:5000/hcu/base/dtk:26.10-rockylinux8.6-py3.12@sha256:b888f86873c4eb9f05df99890f44f40a4f0e586a70fc2a009159684bc7352d92
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare HCU environment
+        shell: bash
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          mkdir -p "${d}"
+          rm -f "${d}/build-requirements.txt" "${d}/aicc-version.txt"
+          bash .github/scripts/setup-hcu-env.sh "${d}"
+      - name: Build manylinux wheel
+        shell: bash
+        run: bash build_hcu_wheel.sh
+      - name: Share wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/manylinux/torchvision-*.whl)
+          (( ${#wheels[@]} == 1 )) || { echo 'Expected one manylinux wheel' >&2; exit 1; }
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          mkdir -p "${d}"
+          cp "${wheels[0]}" "${d}/"
+          python3 -m pip freeze | grep -vi '^torchvision==' > "${d}/build-requirements.txt"
+
+  test:
+    needs: build
+    runs-on: hygon-bw1100-1card
+    timeout-minutes: 180
+    container:
+      image: 10.16.1.152:5000/hcu/base/dtk:26.10-rockylinux8.6-py3.12@sha256:b888f86873c4eb9f05df99890f44f40a4f0e586a70fc2a009159684bc7352d92
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare HCU environment
+        shell: bash
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
+          bash .github/scripts/setup-hcu-env.sh "${d}"
+      - name: Fetch wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/torchvision-*.whl)
+          (( ${#wheels[@]} == 1 )) || { echo 'Expected one shared wheel' >&2; exit 1; }
+          mkdir -p dist/manylinux
+          cp "${wheels[0]}" dist/manylinux/
+      - name: Test wheel
+        continue-on-error: true
+        shell: bash
+        run: bash .github/scripts/test-hcu-wheel.sh
+      - name: Save test report
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          if [[ -f test-results.xml ]]; then cp test-results.xml "${d}/test-results.xml"; fi
+
+  publish:
+    needs: [build, test]
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' }}
+    runs-on: hygon-build
+    timeout-minutes: 60
+    container:
+      image: 10.16.1.152:5000/hcu/base/dtk:26.10-rockylinux8.6-py3.12@sha256:b888f86873c4eb9f05df99890f44f40a4f0e586a70fc2a009159684bc7352d92
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare HCU environment
+        shell: bash
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
+          bash .github/scripts/setup-hcu-env.sh "${d}"
+      - name: Prepare and upload NIGHTLY
+        shell: bash
+        env:
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ -n "${PYPI_PASSWORD}" ]] || { echo 'PYPI_PASSWORD secret is required' >&2; exit 1; }
+          export ROCM_PATH=/opt/dtk
+          set +u
+          source /opt/dtk/env.sh
+          set -u
+          export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
+          python3 -m pip install --no-cache-dir \
+            'http://12.12.12.201:9929/open/deps/+f/0f9/40a51f36eaf4b/CIUpload-0.5.9-py3-none-any.whl#sha256=0f940a51f36eaf4bb438b2a564c29a582c2976da9595461e530ba78129aaa794' \
+            --trusted-host 12.12.12.201
+          shopt -s nullglob
+          wheels=(/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/torchvision-*.whl)
+          (( ${#wheels[@]} == 1 )) || { echo 'Expected one shared wheel' >&2; exit 1; }
+          torch_version="$(python3 -c 'from importlib.metadata import version; print(version("torch").split("+", 1)[0])')"
+          CIUpload REPAIR --dtk_version 2610 --torch_version "${torch_version}" \
+            --git_commit "$(git rev-parse --short=6 HEAD)" --outputdir output -f "${wheels[0]}"
+          repaired=(output/*.whl)
+          (( ${#repaired[@]} == 1 )) || { echo 'Expected one repaired wheel' >&2; exit 1; }
+          CIUpload NIGHTLY --devpi_url http://10.16.1.201:9929 \
+            --dtk_version 2610 --password "${PYPI_PASSWORD}" --record -f "${repaired[0]}"
