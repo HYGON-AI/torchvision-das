@@ -22,7 +22,11 @@ jobs:
           fetch-depth: 0
       - name: Prepare HCU environment
         shell: bash
-        run: bash .github/scripts/setup-hcu-env.sh
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          mkdir -p "${d}"
+          rm -f "${d}/build-requirements.txt" "${d}/aicc-version.txt"
+          bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Build manylinux wheel
         shell: bash
         run: bash build_hcu_wheel.sh
@@ -36,6 +40,7 @@ jobs:
           d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
           mkdir -p "${d}"
           cp "${wheels[0]}" "${d}/"
+          python3 -m pip freeze > "${d}/build-requirements.txt"
 
   test:
     needs: build
@@ -50,7 +55,10 @@ jobs:
           persist-credentials: false
       - name: Prepare HCU environment
         shell: bash
-        run: bash .github/scripts/setup-hcu-env.sh
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
+          bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Fetch wheel
         shell: bash
         run: |
@@ -63,3 +71,9 @@ jobs:
       - name: Test wheel
         shell: bash
         run: bash .github/scripts/test-hcu-wheel.sh
+      - name: Save test report
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          if [[ -f test-results.xml ]]; then cp test-results.xml "${d}/test-results.xml"; fi
