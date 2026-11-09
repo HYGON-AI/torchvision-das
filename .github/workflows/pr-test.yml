@@ -1,0 +1,37 @@
+name: PR Test
+
+on:
+  pull_request_target:
+    branches: [0.28.0-dev]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: self-hosted
+    timeout-minutes: 480
+    container:
+      image: 10.16.1.152:5000/hcu/base/dtk:26.10-rockylinux8.6-py3.12
+      options: >-
+        --network=host --privileged --device=/dev/kfd --device=/dev/dri
+        --ipc=host --shm-size=32G --group-add video --cap-add=SYS_PTRACE
+        --security-opt seccomp=unconfined
+        -v /opt/hyhal:/opt/hyhal:ro -v /usr/local/hyhal:/usr/local/hyhal:ro
+        -v /public/opendas/DL_DATA/ImageNet-pytorch:/public/opendas/DL_DATA/ImageNet-pytorch:ro
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare HCU environment
+        shell: bash
+        run: bash .github/scripts/setup-hcu-env.sh
+      - name: Build manylinux wheel
+        shell: bash
+        run: bash build_hcu_wheel.sh
+      - name: Test wheel
+        shell: bash
+        run: bash .github/scripts/test-hcu-wheel.sh
