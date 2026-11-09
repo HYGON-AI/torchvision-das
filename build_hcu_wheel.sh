@@ -27,6 +27,7 @@ python3 -m pip install --no-cache-dir \
     -i "${HUAWEI_INDEX}"
 
 export USE_MKLDNN=0
+export FORCE_CUDA=1
 export MAX_JOBS="${MAX_JOBS:-32}"
 export HIPCC_VERBOSE=0
 export PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH:-${AMDGPU_TARGETS:-}}"

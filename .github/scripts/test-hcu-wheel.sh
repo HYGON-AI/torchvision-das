@@ -16,7 +16,7 @@ wheels=("${repo_root}"/dist/manylinux/torchvision-*.whl)
 python3 -m pip install --no-cache-dir --no-deps --force-reinstall "${wheels[0]}"
 python3 -m pip install --no-cache-dir \
     pytest pytest-mock pytest-xdist pytest-timeout pytest-time pytest-rerunfailures \
-    scipy==1.13.1 requests torchdata \
+    numpy==2.1.0 pillow scipy==1.13.1 requests torchdata \
     -i https://mirrors.huaweicloud.com/artifactory/pypi-public/simple
 
 cd /tmp
