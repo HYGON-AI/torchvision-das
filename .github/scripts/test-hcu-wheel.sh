@@ -20,6 +20,7 @@ python3 -m pip install --no-cache-dir \
     -i https://mirrors.huaweicloud.com/artifactory/pypi-public/simple
 
 cd /tmp
+set +e
 PYTHONHASHSEED=0 python3 -m pytest -q "${repo_root}/test/" \
     --ignore="${repo_root}/test/test_prototype_datasets_builtin.py" \
     --ignore="${repo_root}/test/test_prototype_datasets_utils.py" \
@@ -27,4 +28,11 @@ PYTHONHASHSEED=0 python3 -m pytest -q "${repo_root}/test/" \
     --ignore="${repo_root}/test/test_prototype_transforms.py" \
     --ignore="${repo_root}/test/test_datasets_download.py" \
     -n 4 --dist=worksteal --timeout=1800 --timeout-method=thread \
-    --tb=short --junit-xml="${repo_root}/test-results.xml" -ra
+    --tb=short --junit-xml="${repo_root}/test-results.xml" -ra \
+    2>&1 | tee "${repo_root}/test-output.log"
+statuses=("${PIPESTATUS[@]}")
+set -e
+(( statuses[1] == 0 )) || exit "${statuses[1]}"
+python3 "${repo_root}/.github/scripts/check-hcu-test-results.py" \
+    "${repo_root}/test-output.log" "${repo_root}/test-results.xml" \
+    "${repo_root}/.github/scripts/hcu-known-failures.txt" "${statuses[0]}"
