@@ -23,9 +23,10 @@ jobs:
       - name: Prepare HCU environment
         shell: bash
         run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           mkdir -p "${d}"
           rm -f "${d}/build-requirements.txt" "${d}/aicc-version.txt"
+          rm -f "${d}"/torchvision-*.whl
           bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Build manylinux wheel
         shell: bash
@@ -37,10 +38,16 @@ jobs:
           shopt -s nullglob
           wheels=(dist/manylinux/torchvision-*.whl)
           (( ${#wheels[@]} == 1 )) || { echo 'Expected one manylinux wheel' >&2; exit 1; }
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           mkdir -p "${d}"
           cp "${wheels[0]}" "${d}/"
           python3 -m pip freeze | grep -vi '^torchvision==' > "${d}/build-requirements.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcu-build
+          path: ci-shared/
+          if-no-files-found: error
+          overwrite: true
 
   test:
     needs: build
@@ -53,10 +60,14 @@ jobs:
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: hcu-build
+          path: ci-shared
       - name: Prepare HCU environment
         shell: bash
         run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
           bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Fetch wheel
@@ -64,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          wheels=(/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/torchvision-*.whl)
+          wheels=(ci-shared/torchvision-*.whl)
           (( ${#wheels[@]} == 1 )) || { echo 'Expected one shared wheel' >&2; exit 1; }
           mkdir -p dist/manylinux
           cp "${wheels[0]}" dist/manylinux/
@@ -74,7 +85,9 @@ jobs:
         run: bash .github/scripts/test-hcu-wheel.sh
       - name: Save test report
         if: ${{ always() }}
-        shell: bash
-        run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
-          if [[ -f test-results.xml ]]; then cp test-results.xml "${d}/test-results.xml"; fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcu-test-report
+          path: test-results.xml
+          if-no-files-found: ignore
+          overwrite: true

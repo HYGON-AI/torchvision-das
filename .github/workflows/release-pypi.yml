@@ -21,9 +21,10 @@ jobs:
       - name: Prepare HCU environment
         shell: bash
         run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           mkdir -p "${d}"
           rm -f "${d}/build-requirements.txt" "${d}/aicc-version.txt"
+          rm -f "${d}"/torchvision-*.whl
           bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Build manylinux wheel
         shell: bash
@@ -35,10 +36,16 @@ jobs:
           shopt -s nullglob
           wheels=(dist/manylinux/torchvision-*.whl)
           (( ${#wheels[@]} == 1 )) || { echo 'Expected one manylinux wheel' >&2; exit 1; }
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           mkdir -p "${d}"
           cp "${wheels[0]}" "${d}/"
           python3 -m pip freeze | grep -vi '^torchvision==' > "${d}/build-requirements.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hcu-build
+          path: ci-shared/
+          if-no-files-found: error
+          overwrite: true
 
   test:
     needs: build
@@ -50,10 +57,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: hcu-build
+          path: ci-shared
       - name: Prepare HCU environment
         shell: bash
         run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
           bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Fetch wheel
@@ -61,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          wheels=(/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/torchvision-*.whl)
+          wheels=(ci-shared/torchvision-*.whl)
           (( ${#wheels[@]} == 1 )) || { echo 'Expected one shared wheel' >&2; exit 1; }
           mkdir -p dist/manylinux
           cp "${wheels[0]}" dist/manylinux/
@@ -71,10 +82,12 @@ jobs:
         run: bash .github/scripts/test-hcu-wheel.sh
       - name: Save test report
         if: ${{ always() }}
-        shell: bash
-        run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
-          if [[ -f test-results.xml ]]; then cp test-results.xml "${d}/test-results.xml"; fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcu-test-report
+          path: test-results.xml
+          if-no-files-found: ignore
+          overwrite: true
 
   publish:
     needs: [build, test]
@@ -87,10 +100,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: hcu-build
+          path: ci-shared
       - name: Prepare HCU environment
         shell: bash
         run: |
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}"
+          d="${GITHUB_WORKSPACE}/ci-shared"
           [[ -s "${d}/build-requirements.txt" && -s "${d}/aicc-version.txt" ]] || exit 1
           bash .github/scripts/setup-hcu-env.sh "${d}"
       - name: Prepare and upload NIGHTLY
@@ -110,7 +127,7 @@ jobs:
             'http://12.12.12.201:9929/open/deps/+f/0f9/40a51f36eaf4b/CIUpload-0.5.9-py3-none-any.whl#sha256=0f940a51f36eaf4bb438b2a564c29a582c2976da9595461e530ba78129aaa794' \
             --trusted-host 12.12.12.201
           shopt -s nullglob
-          wheels=(/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/torchvision-*.whl)
+          wheels=(ci-shared/torchvision-*.whl)
           (( ${#wheels[@]} == 1 )) || { echo 'Expected one shared wheel' >&2; exit 1; }
           torch_version="$(python3 -c 'from importlib.metadata import version; print(version("torch").split("+", 1)[0])')"
           CIUpload REPAIR --dtk_version 2610 --torch_version "${torch_version}" \
