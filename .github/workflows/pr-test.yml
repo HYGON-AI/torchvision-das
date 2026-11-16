@@ -2,7 +2,7 @@ name: PR Test
 
 on:
   pull_request_target:
-    branches: [0.28.0-dev]
+    branches: [ci/vision-fork-gate-verify]
     types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
               ...context.repo,
               pull_number: eventPr.number,
             });
-            if (pr.state !== 'open' || pr.base.ref !== '0.28.0-dev' ||
+            if (pr.state !== 'open' || pr.base.ref !== 'ci/vision-fork-gate-verify' ||
                 pr.base.sha !== eventPr.base.sha || pr.head.sha !== eventPr.head.sha) {
               core.notice('PR commits changed; wait for a fresh event.');
               return;
