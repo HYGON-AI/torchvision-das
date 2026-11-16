@@ -1,9 +1,9 @@
 name: PR Test
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [0.28.0-dev]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 permissions:
   contents: read
@@ -13,7 +13,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+      base_sha: ${{ steps.check.outputs.base_sha }}
+      head_sha: ${{ steps.check.outputs.head_sha }}
+    steps:
+      - name: Pin PR commits and authorize HCU use
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eventPr = context.payload.pull_request;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: eventPr.number,
+            });
+            if (pr.state !== 'open' || pr.base.ref !== '0.28.0-dev' ||
+                pr.base.sha !== eventPr.base.sha || pr.head.sha !== eventPr.head.sha) {
+              core.notice('PR commits changed; wait for a fresh event.');
+              return;
+            }
+            const sameRepo = pr.head.repo?.full_name === context.payload.repository.full_name;
+            const approvedFork = context.payload.action === 'labeled' &&
+              context.payload.label?.name === 'hcu-ci-approved';
+            if (!sameRepo && !approvedFork) {
+              core.notice('A maintainer must apply hcu-ci-approved to run fork code on HCU.');
+              return;
+            }
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('ready', 'true');
+
   build:
+    needs: authorize
+    if: needs.authorize.outputs.ready == 'true'
     runs-on: hygon-build
     timeout-minutes: 90
     container:
@@ -21,9 +59,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: ${{ needs.authorize.outputs.base_sha }}
           persist-credentials: false
           fetch-depth: 0
+      - name: Merge pinned PR commit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
+          test "$(git rev-parse refs/remotes/origin/ci-pr-head)" = "${PR_HEAD_SHA}"
+          git -c user.name='torchvision CI' -c user.email='ci@users.noreply.github.com' \
+            merge --no-ff --no-edit "${PR_HEAD_SHA}"
       - name: Prepare HCU environment
         shell: bash
         run: |
@@ -47,7 +97,7 @@ jobs:
           python3 -m pip freeze | grep -vi '^torchvision==' > "${d}/build-requirements.txt"
 
   test:
-    needs: build
+    needs: [authorize, build]
     runs-on: hygon-bw1100-1card
     timeout-minutes: 180
     container:
@@ -55,8 +105,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: ${{ needs.authorize.outputs.base_sha }}
           persist-credentials: false
+          fetch-depth: 0
+      - name: Merge pinned PR commit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
+          test "$(git rev-parse refs/remotes/origin/ci-pr-head)" = "${PR_HEAD_SHA}"
+          git -c user.name='torchvision CI' -c user.email='ci@users.noreply.github.com' \
+            merge --no-ff --no-edit "${PR_HEAD_SHA}"
       - name: Prepare HCU environment
         shell: bash
         run: |
