@@ -2,6 +2,7 @@ name: Build Windows ARM64 Wheels
 
 on:
   pull_request:
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
     paths:
       - .github/workflows/build_wheel_windows_arm64.yml
   push:
@@ -20,6 +21,7 @@ permissions:
 
 jobs:
   generate-matrix:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     uses: pytorch/test-infra/.github/workflows/generate_binary_build_matrix.yml@release/2.13
     with:
       package-type: wheel
@@ -29,6 +31,7 @@ jobs:
       with-cuda: disable
 
   build:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     needs: generate-matrix
     strategy:
       fail-fast: false
