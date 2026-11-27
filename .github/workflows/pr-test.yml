@@ -3,7 +3,7 @@ name: PR Test
 on:
   pull_request:
     branches: [0.28.0-dev]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu') }}
     runs-on: hygon-build
     timeout-minutes: 90
     container:
@@ -48,6 +49,7 @@ jobs:
 
   test:
     needs: build
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu') }}
     runs-on: hygon-bw1100-1card
     timeout-minutes: 180
     container:

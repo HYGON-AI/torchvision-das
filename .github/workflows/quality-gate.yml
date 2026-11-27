@@ -2,7 +2,7 @@ name: Quality Gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
     branches:
       - 0.28.0-dev
 
@@ -16,6 +16,7 @@ concurrency:
 jobs:
   gate:
     name: Checks
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu') }}
     uses: HYGON-AI/quality-gate/.github/workflows/pr-quality-gate.yml@v2.0.3
     permissions:
       contents: read
