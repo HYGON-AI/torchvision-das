@@ -1,0 +1,55 @@
+# Known HCU failures from PR Test run 42598900239 (49 cases).
+# Recheck each entry when torch, DTK, or torchvision changes.
+# Posterize HCU bits validation failure.
+test/test_functional_tensor.py::test_posterize[1-config0-cuda]
+test/test_functional_tensor.py::test_posterize[3-config0-cuda]
+# GPU JPEG: nvJPEG is unavailable in the current HCU wheel.
+test/test_image.py::test_batch_encode_jpegs_cuda_errors
+test/test_image.py::test_decode_jpeg_cuda_device_param
+test/test_image.py::test_decode_jpeg_cuda_errors
+test/test_image.py::test_decode_jpegs_cuda[False-ImageReadMode.GRAY]
+test/test_image.py::test_decode_jpegs_cuda[False-ImageReadMode.RGB]
+test/test_image.py::test_decode_jpegs_cuda[False-ImageReadMode.UNCHANGED]
+test/test_image.py::test_decode_jpegs_cuda[True-ImageReadMode.GRAY]
+test/test_image.py::test_decode_jpegs_cuda[True-ImageReadMode.RGB]
+test/test_image.py::test_decode_jpegs_cuda[True-ImageReadMode.UNCHANGED]
+test/test_image.py::test_encode_jpeg_cuda[False-False-grace_hopper_517x606.jpg]
+test/test_image.py::test_encode_jpeg_cuda[False-False-rgb_pytorch.jpg]
+test/test_image.py::test_encode_jpeg_cuda[False-True-grace_hopper_517x606.jpg]
+test/test_image.py::test_encode_jpeg_cuda[False-True-rgb_pytorch.jpg]
+test/test_image.py::test_encode_jpeg_cuda[True-False-grace_hopper_517x606.jpg]
+test/test_image.py::test_encode_jpeg_cuda[True-False-rgb_pytorch.jpg]
+test/test_image.py::test_encode_jpeg_cuda[True-True-grace_hopper_517x606.jpg]
+test/test_image.py::test_encode_jpeg_cuda[True-True-rgb_pytorch.jpg]
+test/test_image.py::test_encode_jpeg_cuda_device_param
+test/test_image.py::test_encode_jpeg_cuda_sync
+test/test_image.py::test_encode_jpegs_batch[False-False-cuda]
+test/test_image.py::test_encode_jpegs_batch[False-True-cuda]
+test/test_image.py::test_encode_jpegs_batch[True-False-cuda]
+test/test_image.py::test_encode_jpegs_batch[True-True-cuda]
+test/test_image.py::test_single_encode_jpeg_cuda_errors
+# Model numeric mismatch on HCU.
+test/test_models.py::test_detection_model[cuda-maskrcnn_resnet50_fpn]
+test/test_models.py::test_detection_model[cuda-ssdlite320_mobilenet_v3_large]
+test/test_models.py::test_segmentation_model[cuda-fcn_resnet101]
+# RoIAlign backward HCU autograd failure.
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-0]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-1]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-2]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-3]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-4]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-5]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-6]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-7]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-8]
+test/test_ops.py::TestRoIAlign::test_backward[True-False-cuda-9]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-0]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-1]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-2]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-3]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-4]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-5]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-6]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-7]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-8]
+test/test_ops.py::TestRoIAlign::test_backward[True-True-cuda-9]
