@@ -3,23 +3,26 @@
 
 name: pr-test
 
-# This workflow intentionally executes fork PR code on a privileged self-hosted
-# runner after repository maintainers approve the run. It must not consume
-# repository secrets.
+# A maintainer-applied label authorizes HCU validation of fork PR code.
+# This workflow must not consume repository secrets.
 on:
   pull_request:
     branches:
       - 0.27.0-dev
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
 
+concurrency:
+  group: vision027-pr-test-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: build-test (${{ matrix.dtk }}, py${{ matrix.python_version }})
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: self-hosted
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu') }}
+    runs-on: hygon-bw1100-1card
     timeout-minutes: 480
     strategy:
       fail-fast: false
@@ -27,12 +30,12 @@ jobs:
         include:
           - dtk: dtk2604
             python_version: "3.10"
-            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            image: 42.228.13.241:5000/dev/dev:rockylinux8.6-mpi5.0-gcc13.3-cmake3.29-py3.10-mkl2024.2.0.664@sha256:0ca3f9410d9c3af2852ac0fbe018e0ba6a6f973df957a3c4170ef75a15be59b2
             dtk_pkg_url: ${{ vars.DTK_PKG_URL }}
             wheel_indexes: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
           - dtk: dtk2610
             python_version: "3.10"
-            image: ${{ vars.BASE_COMPILE_IMAGE_ROCKY_PY310_GCC13 }}
+            image: 42.228.13.241:5000/dev/dev:rockylinux8.6-mpi5.0-gcc13.3-cmake3.29-py3.10-mkl2024.2.0.664@sha256:0ca3f9410d9c3af2852ac0fbe018e0ba6a6f973df957a3c4170ef75a15be59b2
             dtk_pkg_url: http://42.228.13.241:18000/dtk-pkg/dtk26.10/DTK-26.10-Rocky8.6-x86_64.tar.gz
             wheel_indexes: >-
               http://10.16.1.201:9929/customer/dtk2610/+simple/
@@ -55,17 +58,9 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Integrate target branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          git -c user.name='TorchVision CI' -c user.email='ci@localhost' \
-              merge --no-edit "${{ github.event.pull_request.base.sha }}"
 
       - name: Show CI environment flags
         shell: bash
