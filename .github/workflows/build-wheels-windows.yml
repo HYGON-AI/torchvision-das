@@ -2,6 +2,7 @@ name: Build Windows Wheels
 
 on:
   pull_request:
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
   push:
     branches:
       - nightly
@@ -19,6 +20,7 @@ permissions:
 
 jobs:
   generate-matrix:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     uses: pytorch/test-infra/.github/workflows/generate_binary_build_matrix.yml@release/2.12
     with:
       package-type: wheel
@@ -27,6 +29,7 @@ jobs:
       test-infra-ref: release/2.12
       with-xpu: enable
   build:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     needs: generate-matrix
     strategy:
       fail-fast: false

@@ -2,6 +2,7 @@ name: Docs
 
 on:
   pull_request:
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
   push:
     branches:
       - nightly
@@ -14,6 +15,7 @@ on:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     uses: pytorch/test-infra/.github/workflows/linux_job_v2.yml@release/2.12
     permissions:
       id-token: write

@@ -2,6 +2,7 @@ name: Tests
 
 on:
   pull_request:
+    types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
   push:
     branches:
       - nightly
@@ -11,6 +12,7 @@ on:
 
 jobs:
   unittests-linux:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     strategy:
       matrix:
         python-version:
@@ -45,6 +47,7 @@ jobs:
         ./.github/scripts/unittest.sh
 
   unittests-macos:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     strategy:
       matrix:
         python-version:
@@ -68,6 +71,7 @@ jobs:
         ${CONDA_RUN} ./.github/scripts/unittest.sh
 
   unittests-windows:
+    if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu')) }}
     strategy:
       matrix:
         python-version:
@@ -109,7 +113,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    if: contains(github.event.pull_request.labels.*.name, 'run-extended')
+    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'ready-hcu'))) && contains(github.event.pull_request.labels.*.name, 'run-extended') }}
     with:
       repository: pytorch/vision
       test-infra-ref: release/2.12
