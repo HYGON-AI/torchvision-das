@@ -31,8 +31,8 @@ jobs:
           - dtk: dtk2604
             python_version: "3.10"
             image: 42.228.13.241:5000/dev/dev:rockylinux8.6-mpi5.0-gcc13.3-cmake3.29-py3.10-mkl2024.2.0.664@sha256:0ca3f9410d9c3af2852ac0fbe018e0ba6a6f973df957a3c4170ef75a15be59b2
-            dtk_pkg_url: ${{ vars.DTK_PKG_URL }}
-            wheel_indexes: ${{ vars.PYPI_URL }}/das_nightly/dtk2604-rc4/+simple/
+            dtk_pkg_url: ${{ vars.DTK_PKG_URL || 'http://42.228.13.241:18000/dtk-pkg/dtk26.04/DTK-26.04-rc4-centos8-x86_64.tar.gz' }}
+            wheel_indexes: ${{ vars.PYPI_URL || 'http://10.16.1.201:9929' }}/das_nightly/dtk2604-rc4/+simple/
           - dtk: dtk2610
             python_version: "3.10"
             image: 42.228.13.241:5000/dev/dev:rockylinux8.6-mpi5.0-gcc13.3-cmake3.29-py3.10-mkl2024.2.0.664@sha256:0ca3f9410d9c3af2852ac0fbe018e0ba6a6f973df957a3c4170ef75a15be59b2
@@ -82,7 +82,7 @@ jobs:
       - name: Install AICC
         shell: bash
         env:
-          RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL }}
+          RESOURCE_SERVER_URL: ${{ vars.RESOURCE_SERVER_URL || 'http://10.16.1.201:8000' }}
           DTK_VERSION: ${{ matrix.dtk }}
         run: |
           set -euo pipefail
@@ -152,7 +152,7 @@ jobs:
             exit 1
           fi
           python3 -m pip install --no-cache-dir ciupload \
-            -i "${{ vars.PYPI_URL }}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
+            -i "${{ vars.PYPI_URL || 'http://10.16.1.201:9929' }}/nightly/dtk2604/+simple/" --trusted-host 10.16.1.201
           # Importing torch on DTK 26.10 also writes /dev/hyfs errors to stdout.
           torch_version="$(python3 -c 'from importlib.metadata import version; print(version("torch").split("+", 1)[0])')"
           printf 'Torch version for REPAIR: %q\n' "${torch_version}"
